@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:code_forge/code_forge.dart';
 import 'package:dondon_live_coding/texture_utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +20,9 @@ void main() async {
     }
   }
 
+  // init CodeForge
+  await RustLib.init();
+
   // 3. Now it's safe to run your app and build 3D objects
   runApp(const MyApp());
 }
@@ -28,7 +32,16 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(home: Scaffold(body: FirstScene()));
+    // return const MaterialApp(home: Scaffold(body: FirstScene()));
+
+    return MaterialApp(
+      home: Scaffold(
+        body: CodeForge(
+          // language: Mode(), // Defaults to Mode(), means plain text
+          // editorTheme: {"atomOneDarkTheme": }, // Defaults to lightFlairTheme
+        ),
+      ),
+    );
   }
 }
 

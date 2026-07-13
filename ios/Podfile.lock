@@ -1,0 +1,22 @@
+PODS:
+  - code_forge (0.0.1):
+    - Flutter
+  - Flutter (1.0.0)
+
+DEPENDENCIES:
+  - code_forge (from `.symlinks/plugins/code_forge/ios`)
+  - Flutter (from `Flutter`)
+
+EXTERNAL SOURCES:
+  code_forge:
+    :path: ".symlinks/plugins/code_forge/ios"
+  Flutter:
+    :path: Flutter
+
+SPEC CHECKSUMS:
+  code_forge: a4c94adbf8a96960687dec1034a20c02a5929359
+  Flutter: 71a624a5bc0c04062bf19101d501e466baf2fb47
+
+PODFILE CHECKSUM: 3ba3a73b1b12adcf321a227a745625fe0888cc82
+
+COCOAPODS: 1.16.2
