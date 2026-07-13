@@ -35,6 +35,11 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   flutter_scene: ^0.18.1
+  vector_math: ^2.4.0
+  hooks: ^2.0.2
+  flutter_gpu:
+    sdk: flutter
+  flutter_gpu_shaders: ^0.5.1
 
 dev_dependencies:
   flutter_test:
@@ -62,6 +67,10 @@ flutter:
   # assets:
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
+  assets:
+    - assets/models/
+    - assets/textures/
+    - build/shaderbundles/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
