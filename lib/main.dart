@@ -1,29 +1,24 @@
-import 'dart:math';
-
-import 'package:code_forge/code_forge.dart';
-import 'package:dondon_live_coding/texture_utils.dart';
+import 'package:dondon_live_coding/core/dsl.dart';
+import 'package:dondon_live_coding/core/logger.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_scene/scene.dart';
 import 'package:vector_math/vector_math.dart' as vm;
 
+final _log = AppLogger.get('app.main');
+
 void main() async {
-  // 1. Ensure Flutter bindings are initialized first
+  AppLogger.configure();
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
-    // 2. Load the base shader bundle required by Flutter Scene
     await Scene.initializeStaticResources();
   } catch (e) {
     if (kDebugMode) {
-      print("Failed to initialize Flutter Scene resources: $e");
+      _log.severe('Failed to initialize Flutter Scene resources', e);
     }
   }
 
-  // init CodeForge
-  await RustLib.init();
-
-  // 3. Now it's safe to run your app and build 3D objects
   runApp(const MyApp());
 }
 
@@ -32,108 +27,120 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // return const MaterialApp(home: Scaffold(body: FirstScene()));
-
-    return MaterialApp(
-      home: Scaffold(
-        body: CodeForge(
-          // language: Mode(), // Defaults to Mode(), means plain text
-          // editorTheme: {"atomOneDarkTheme": }, // Defaults to lightFlairTheme
-        ),
-      ),
+    return const MaterialApp(
+      home: Scaffold(body: SafeArea(child: CircleDslPreview())),
     );
   }
 }
 
-class FirstScene extends StatefulWidget {
-  const FirstScene({super.key});
+class CircleDslPreview extends StatelessWidget {
+  const CircleDslPreview({super.key});
 
   @override
-  State<FirstScene> createState() => _FirstSceneState();
+  Widget build(BuildContext context) {
+    return const CircleSceneView();
+  }
 }
 
-class _FirstSceneState extends State<FirstScene> {
-  // Constructing a Scene starts loading the engine's shared resources.
-  final Scene scene = Scene();
+class CircleSceneView extends StatefulWidget {
+  const CircleSceneView({super.key});
+
+  @override
+  State<CircleSceneView> createState() => _CircleSceneViewState();
+}
+
+class _CircleSceneViewState extends State<CircleSceneView> {
+  final Scene _scene = Scene();
+  String? _error;
+  double _radius = 0;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _loadSceneFromDsl();
   }
 
-  // The scene hot reloads in place: loadScene patches a re-exported GLB into
-  // this node automatically, and the logo holds only the root, so no reload
-  // callback is needed.
-  Future<void> _load() async {
-    // A cube mesh, made from built-in geometry and an unlit material.
-    final mesh = Mesh(
-      CuboidGeometry(vm.Vector3(1, 1, 1), debugColors: true),
-      UnlitMaterial(),
-    );
+  @override
+  void reassemble() {
+    super.reassemble();
+    _loadSceneFromDsl();
+  }
 
-    final material = PhysicallyBasedMaterial()
-      ..baseColorFactor =
-          vm.Vector4(1, 1, 1, 1.0) // linear RGBA
-      ..metallicFactor =
-          0 // 0 = dielectric, 1 = metal
-      ..roughnessFactor = 0; // 0 = mirror, 1 = fully diffuse
+  Future<void> _loadSceneFromDsl() async {
+    try {
+      final radius = await runCircleScript(circleScriptSource);
 
-    // Load the texture using our helper function
-    loadGpuTextureFromAsset('assets/textures/Teamlab_logo.png').then(
-      (myTexture) => {
-        // Set the texture to the base color (albedo) slot
-        material.baseColorTexture = myTexture,
-      },
-    );
+      _scene.removeAll();
 
-    final spheremesh = Mesh(SphereGeometry(radius: 1), material);
+      // Map DSL radius to world-space units to keep the circle in view.
+      final worldRadius = radius / 40.0;
+      final discNode = Node(
+        mesh: Mesh(
+          DiscGeometry(radius: worldRadius, segments: 96),
+          UnlitMaterial()..baseColorFactor = vm.Vector4(0.2, 0.25, 1.0, 1.0),
+        ),
+        localTransform: vm.Matrix4.identity(),
+      );
+      _scene.add(discNode);
 
-    // final node = Node(mesh: mesh)..addComponent(SpinComponent(1.5));
-    // scene.add(node);
+      if (!mounted) {
+        return;
+      }
 
-    // final node2 = Node(mesh: spheremesh)..addComponent(SpinComponent(1.5));
-    // scene.add(node2);
-
-    // models
-    final model = await loadScene('assets/models/nonkus.glb');
-    scene.add(model);
+      setState(() {
+        _radius = radius;
+        _error = null;
+      });
+    } catch (e) {
+      _log.severe('Failed to render circle from DSL in SceneView', e);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = '$e';
+      });
+    }
   }
 
   @override
   void dispose() {
-    // Optional: the scene is dropped with this State. `Node.fromAsset` caches
-    // the imported model template (shared across clones), so its GPU resources
-    // persist for the session regardless.
-    scene.removeAll();
+    _scene.removeAll();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return SceneView(
-      scene,
-      // The camera orbits the origin once per second.
-      cameraBuilder: (elapsed) {
-        final t = elapsed.inMicroseconds / 1e6;
-        return PerspectiveCamera(
-          position: vm.Vector3(sin(t) * 5, 2, cos(t) * 5),
-          target: vm.Vector3(0, 0, 0),
-        );
-      },
+    return Stack(
+      children: [
+        SceneView(
+          _scene,
+          camera: PerspectiveCamera(
+            position: vm.Vector3(0, 6, 0),
+            target: vm.Vector3(0, 0, 0),
+            up: vm.Vector3(0, 0, -1),
+          ),
+        ),
+        Positioned(
+          left: 16,
+          right: 16,
+          bottom: 16,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text(
+                _error == null
+                    ? 'SceneView circle radius: ${_radius.toStringAsFixed(1)}\nEdit circleScriptSource in lib/core/dsl.dart and hot reload.'
+                    : 'DSL error: $_error',
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
-  }
-}
-
-class SpinComponent extends Component {
-  SpinComponent(this.radiansPerSecond);
-
-  final double radiansPerSecond;
-
-  @override
-  void update(double deltaSeconds) {
-    node.localTransform =
-        node.localTransform *
-        vm.Matrix4.rotationZ(radiansPerSecond * deltaSeconds);
   }
 }

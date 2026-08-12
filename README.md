@@ -7,7 +7,10 @@
 ```
 $ flutter channel master
 $ flutter upgrade
-$ flutter config --enable-dart-data-assets
+$ export FLUTTER_DART_DATA_ASSETS=true # one-time setup
+$ flutter config --enable-native-assets # one-time setup
+$ flutter config --enable-dart-data-assets # one-time setup
+$ flutter pub get
 $ flutter run -d macos --enable-flutter-gpu --enable-impeller
 ```
 
