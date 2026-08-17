@@ -1,3 +1,14 @@
+// Architecture: error-handling layer of the DSL pipeline.
+//
+// Pattern: Result/Either type carrying a Notification (a queue of errors)
+// instead of throwing. Callers thread results through the pipeline and
+// short-circuit on the first failure (railway-oriented programming), which
+// suits a live-coding environment where invalid input is expected, not
+// exceptional, and must never crash or blank the running visual.
+//
+// The error store is a FIFO queue so the UI can peek the oldest error
+// (`firstError`) and `popError()` once it has been acknowledged.
+
 import 'dart:collection';
 
 /// An error produced while parsing or interpreting a DSL command.

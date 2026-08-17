@@ -1,11 +1,16 @@
+// Architecture: host layer — app shell and live-coding editor host.
+//
+// Boots Flutter Scene resources and mounts a UI host that edits DSL source.
+// The host keeps draft text local, commits it on keyboard action, and passes
+// committed source to DslStage. DslStage remains the sole scene owner.
+
 import 'package:dondon_live_coding/core/dsl.dart';
-import 'package:dondon_live_coding/core/dsl_result.dart';
-import 'package:dondon_live_coding/core/interpreter.dart';
 import 'package:dondon_live_coding/core/logger.dart';
+import 'package:dondon_live_coding/runtime/dsl_stage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_scene/scene.dart';
-import 'package:vector_math/vector_math.dart' as vm;
 
 final _log = AppLogger.get('app.main');
 
@@ -30,131 +35,134 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const MaterialApp(
-      home: Scaffold(body: SafeArea(child: CircleDslPreview())),
+      home: Scaffold(
+        // traditional live coding background color is black, so keeping that for now
+        backgroundColor: Colors.black,
+        body: SafeArea(child: DslLiveCodingHost()),
+      ),
     );
   }
 }
 
-class CircleDslPreview extends StatelessWidget {
-  const CircleDslPreview({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const CircleSceneView();
-  }
+class _ApplyScriptIntent extends Intent {
+  const _ApplyScriptIntent();
 }
 
-class CircleSceneView extends StatefulWidget {
-  const CircleSceneView({super.key});
+class DslLiveCodingHost extends StatefulWidget {
+  const DslLiveCodingHost({super.key});
 
   @override
-  State<CircleSceneView> createState() => _CircleSceneViewState();
+  State<DslLiveCodingHost> createState() => _DslLiveCodingHostState();
 }
 
-class _CircleSceneViewState extends State<CircleSceneView> {
-  final Scene _scene = Scene();
-  final DslInterpreter _interpreter = const ShapeCommandInterpreter();
-  DslError? _error;
-  String _shapeCommand = 'none';
+class _DslLiveCodingHostState extends State<DslLiveCodingHost> {
+  late final TextEditingController _controller;
+  late String _draftSource;
+  late String _committedSource;
 
   @override
   void initState() {
     super.initState();
-    _loadSceneFromDsl();
-  }
-
-  @override
-  void reassemble() {
-    super.reassemble();
-    _loadSceneFromDsl();
-  }
-
-  Future<void> _loadSceneFromDsl() async {
-    final script = await runCircleScript(circleScriptSource);
-    if (_reportIfFailed(script)) {
-      return;
-    }
-
-    final parsed = ShapeCommand.parse(script.value!);
-    if (_reportIfFailed(parsed)) {
-      return;
-    }
-
-    final node = _interpreter.interpret(parsed.value!);
-    if (_reportIfFailed(node)) {
-      return;
-    }
-
-    _scene.removeAll();
-    _scene.add(node.value!);
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _shapeCommand = '${parsed.value}';
-      _error = null;
-    });
-  }
-
-  /// Leaves the current scene untouched and surfaces the oldest error.
-  bool _reportIfFailed(DslResult<Object?> result) {
-    final error = result.firstError;
-    if (error == null) {
-      return false;
-    }
-
-    _log.severe('DSL error: $error');
-    if (mounted) {
-      setState(() {
-        _error = error;
-      });
-    }
-    return true;
+    _draftSource = circleScriptSource;
+    _committedSource = circleScriptSource;
+    _controller = TextEditingController(text: _draftSource);
   }
 
   @override
   void dispose() {
-    _scene.removeAll();
+    _controller.dispose();
     super.dispose();
+  }
+
+  void _commitDraft() {
+    if (_committedSource == _draftSource) {
+      return;
+    }
+
+    setState(() {
+      _committedSource = _draftSource;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        SceneView(
-          _scene,
-          camera: PerspectiveCamera(
-            position: vm.Vector3(0, 6, 0),
-            target: vm.Vector3(0, 0, 0),
-            up: vm.Vector3(0, 0, -1),
+    return Shortcuts(
+      shortcuts: const <ShortcutActivator, Intent>{
+        SingleActivator(LogicalKeyboardKey.enter, meta: true):
+            _ApplyScriptIntent(),
+      },
+      child: Actions(
+        actions: <Type, Action<Intent>>{
+          _ApplyScriptIntent: CallbackAction<_ApplyScriptIntent>(
+            onInvoke: (_) {
+              _commitDraft();
+              return null;
+            },
           ),
-        ),
-        Positioned(
-          left: 16,
-          right: 16,
-          bottom: 16,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.45),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Text(
-                _error == null
-                    ? 'SceneView shape: $_shapeCommand\nEdit circleScriptSource in lib/core/dsl.dart and hot reload.'
-                    : 'DSL error: ${_error!.message}\nStill showing: $_shapeCommand',
-                style: TextStyle(
-                  color: _error == null ? Colors.white : Colors.orangeAccent,
+        },
+        child: Focus(
+          autofocus: true,
+          child: Row(
+            mainAxisSize: MainAxisSize.max,
+            children: [
+              Flexible(
+                flex: 1,
+                child: Container(
+                  margin: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF101010),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFF2B2B2B)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.max,
+                    children: [
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'DSL Script (Cmd / Ctrl + Enter to apply)',
+                              style: TextStyle(color: Colors.white70),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _commitDraft,
+                            child: const Text('Apply'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: _controller,
+                          onChanged: (value) {
+                            _draftSource = value;
+                          },
+                          maxLines: null,
+                          expands: true,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'monospace',
+                            height: 1.35,
+                          ),
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            hintText: 'Write DSL here...',
+                            hintStyle: TextStyle(color: Colors.white38),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
+              Flexible(flex: 2, child: DslStage(source: _committedSource)),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 }

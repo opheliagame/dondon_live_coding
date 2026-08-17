@@ -1,3 +1,16 @@
+// Architecture: back end of the DSL pipeline
+// (script -> DScript runtime -> ShapeCommand IR -> scene Node).
+//
+// - `ShapeCommand` is the intermediate representation (a minimal AST) the
+//   script's string output is parsed into; `ShapeType` makes it a tagged union
+//   so dispatch is an exhaustive switch with no fallthrough case.
+// - `DslInterpreter` is the Interpreter pattern (GoF) and, architecturally, a
+//   port: DSL semantics live here while `ShapeCommandInterpreter` is the
+//   adapter that knows about flutter_scene. Swapping renderers means adding an
+//   implementation, not editing the parser.
+// - Every step returns `DslResult` rather than throwing, so a bad command
+//   leaves the previously rendered scene intact.
+
 import 'package:dondon_live_coding/core/dsl_result.dart';
 import 'package:flutter_scene/scene.dart';
 import 'package:vector_math/vector_math.dart' as vm;

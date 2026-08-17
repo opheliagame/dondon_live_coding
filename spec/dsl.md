@@ -60,3 +60,9 @@ Code snippet
 osc(40.0).rotate(0.5).out();
 Step 3: Parse and Pipe to Shaders
 When the user hits Shift + Enter (or as they type), dscript parses the string, validates the arguments, and calls your underlying Flutter shader or canvas pipeline to update the visuals dynamically.
+
+## Interpreter pattern
+
+[Interpreter pattern on Wikipedia](https://en.wikipedia.org/wiki/Interpreter_pattern)
+
+![A sample UML class and object diagram for the Interpreter design pattern.](./W3sDesign_Interpreter_Design_Pattern_UML.jpg)

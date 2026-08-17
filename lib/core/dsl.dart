@@ -1,3 +1,14 @@
+// Architecture: front end of the DSL pipeline.
+//
+// The user's script is sandboxed in the DScript VM rather than evaluated as
+// Dart, so a bad script during a performance cannot take down the app. The
+// host exposes primitives (`circle`, `rect`, `out`) as a contract of external
+// bindings; those bindings return command strings, keeping the boundary
+// between the sandbox and the renderer a plain serialisable value.
+//
+// Analysis, compilation and execution failures are returned as `DslResult`
+// errors so the caller can keep the last good frame on screen.
+
 import 'package:antlr4/antlr4.dart';
 import 'package:dondon_live_coding/core/dsl_result.dart';
 import 'package:dondon_live_coding/core/logger.dart';
@@ -15,7 +26,7 @@ description "Render a circle from DScript";
 
 contract Canvas {
   impl render() -> string {
-    return out(circle(64.0));
+    return out(rect(14.0,12.0));
 	}
 }
 ''';
