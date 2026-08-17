@@ -11,6 +11,7 @@ import 'package:dondon_live_coding/core/logger.dart';
 import 'package:dondon_live_coding/runtime/dsl_runtime.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_scene/scene.dart';
+import 'package:vector_math/vector_math.dart' as vm;
 
 final _log = AppLogger.get('app.runtime.dsl_stage');
 
@@ -27,15 +28,20 @@ class DslStage extends StatefulWidget {
 
 class _DslStageState extends State<DslStage> {
   final Scene _scene = Scene();
+  late final PerspectiveCamera _camera;
   late final DslRuntime _runtime;
 
-  DslFrame? _frame;
   DslError? _error;
   String _status = 'none';
 
   @override
   void initState() {
     super.initState();
+    _camera = PerspectiveCamera(
+      position: vm.Vector3(0, 8, 0),
+      target: vm.Vector3(0, 0, 0),
+      up: vm.Vector3(0, 0, -1),
+    );
     _runtime = widget._runtime ?? DslRuntime();
     _evaluateAndApply();
   }
@@ -71,15 +77,16 @@ class _DslStageState extends State<DslStage> {
     }
 
     _scene.removeAll();
-    _scene.add(frame.node);
+    for (final node in frame.nodes) {
+      _scene.add(node);
+    }
 
     if (!mounted) {
       return;
     }
 
     setState(() {
-      _frame = frame;
-      _status = '${frame.command}';
+      _status = frame.commands.map((command) => '$command').join(' + ');
       _error = null;
     });
   }
@@ -108,13 +115,9 @@ class _DslStageState extends State<DslStage> {
 
   @override
   Widget build(BuildContext context) {
-    final content = _frame == null
-        ? const SizedBox.expand()
-        : _runtime.componentFor(_frame!, _scene);
-
     return Stack(
       children: [
-        content,
+        Positioned.fill(child: SceneView(_scene, camera: _camera)),
         Positioned(
           left: 16,
           right: 16,

@@ -38,7 +38,7 @@ description "Render a circle from DScript";
 
 contract Canvas {
   impl render() -> string {
-    return out(circle(64.0));
+    return out(circle(64.0), out(rect(10.0,8.0), rect(6.0,4.0)));
   }
 }
 ''';
@@ -47,7 +47,10 @@ contract Canvas {
 
     expect(result.isOk, isTrue);
     expect(result.value, isNotNull);
-    expect(result.value!.command.type.name, 'circle');
+    expect(result.value!.commands.length, 3);
+    expect(result.value!.commands.first.type.name, 'circle');
+    expect(result.value!.commands.last.type.name, 'rect');
+    expect(result.value!.nodes.length, 3);
   });
 
   test('DslRuntime reports invalid geometry without throwing', () async {
@@ -63,7 +66,7 @@ description "Render a circle from DScript";
 
 contract Canvas {
   impl render() -> string {
-    return out(circle(-1.0));
+    return out(circle(-1.0), rect(10.0,8.0));
   }
 }
 ''';

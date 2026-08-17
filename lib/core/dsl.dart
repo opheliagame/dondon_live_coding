@@ -17,19 +17,27 @@ import 'package:dscript_dart/dscript_dart.dart';
 final _log = AppLogger.get('app.dsl');
 const _hostBindingNames = ['circle', 'rect', 'out'];
 
-// Edit this string to test the DSL. Keep the call style as out(circle(...)).
+// Edit this string to test the DSL.
 String get circleScriptSource => '''
-author "Anushka";
+author "opheliagame";
 version 1.0.0;
-name "Circle Demo";
-description "Render a circle from DScript";
+name "dondon demo";
+description "demo a live coding flutter environment";
 
 contract Canvas {
   impl render() -> string {
-    return out(rect(14.0,12.0));
-	}
+    return out(
+      rect(14.0,12.0),
+      out(
+        circle(12.0),
+        rect(125.0,12.0)
+      )
+    );
+  }
 }
 ''';
+
+const _commandSeparator = ';';
 
 String _normalizeExternalBindingCalls(String source) {
   var normalized = source;
@@ -60,9 +68,14 @@ final ContractSignature _canvasContract = contract('Canvas')
     .param(PrimitiveType.DOUBLE)
     .describe('Constructs a rectangle shape command.')
     .end()
-    .bind<String>('out', (String shape) => shape)
+    .bind<String>('out', (String shape, String restShapes) {
+      return '$shape$_commandSeparator$restShapes';
+    })
     .param(PrimitiveType.STRING)
-    .describe('Emits a shape command to the host renderer.')
+    .param(PrimitiveType.STRING)
+    .describe(
+      'Emits one or more shape commands by recursive composition, e.g. out(a, out(b, c)).',
+    )
     .end()
     .build();
 

@@ -1,33 +1,26 @@
-// Architecture: runtime layer — maps core DSL output to draw-only components.
+// Architecture: runtime layer — maps core DSL output to scene nodes.
 //
 // This layer chains the core pipeline (dsl.dart -> ShapeCommand ->
-// DslInterpreter -> Node), then chooses a component using a ShapeType registry.
-// Core remains widget-free; runtime is the adapter to Flutter UI widgets.
+// DslInterpreter -> Node) and returns a renderable frame. The stage owns the
+// single SceneView/camera so multiple nodes can coexist in one shared scene.
 
-import 'package:dondon_live_coding/components/circle_component.dart';
-import 'package:dondon_live_coding/components/rect_component.dart';
 import 'package:dondon_live_coding/core/dsl.dart';
 import 'package:dondon_live_coding/core/dsl_result.dart';
 import 'package:dondon_live_coding/core/interpreter.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_scene/scene.dart';
 
 class DslFrame {
-  const DslFrame({required this.command, required this.node});
+  const DslFrame({required this.commands, required this.nodes});
 
-  final ShapeCommand command;
-  final Node node;
+  final List<ShapeCommand> commands;
+  final List<Node> nodes;
 }
 
 class DslRuntime {
-  DslRuntime({
-    DslInterpreter? interpreter,
-    Map<ShapeType, Widget Function(Scene)>? registry,
-  }) : _interpreter = interpreter ?? const ShapeCommandInterpreter(),
-       _registry = registry ?? _defaultRegistry;
+  DslRuntime({DslInterpreter? interpreter})
+    : _interpreter = interpreter ?? const ShapeCommandInterpreter();
 
   final DslInterpreter _interpreter;
-  final Map<ShapeType, Widget Function(Scene)> _registry;
 
   Future<DslResult<DslFrame>> evaluate(String source) async {
     final script = await runCircleScript(source);
@@ -35,30 +28,20 @@ class DslRuntime {
       return script.mapErrors<DslFrame>();
     }
 
-    final parsed = ShapeCommand.parse(script.value!);
+    final parsed = ShapeCommand.parseMany(script.value!);
     if (!parsed.isOk || parsed.value == null) {
       return parsed.mapErrors<DslFrame>();
     }
 
-    final node = _interpreter.interpret(parsed.value!);
-    if (!node.isOk || node.value == null) {
-      return node.mapErrors<DslFrame>();
+    final nodes = <Node>[];
+    for (final command in parsed.value!) {
+      final node = _interpreter.interpret(command);
+      if (!node.isOk || node.value == null) {
+        return node.mapErrors<DslFrame>();
+      }
+      nodes.add(node.value!);
     }
 
-    return DslResult.ok(DslFrame(command: parsed.value!, node: node.value!));
-  }
-
-  Widget componentFor(DslFrame frame, Scene scene) {
-    final builder = _registry[frame.command.type];
-    if (builder != null) {
-      return builder(scene);
-    }
-
-    return CircleComponent(scene: scene);
+    return DslResult.ok(DslFrame(commands: parsed.value!, nodes: nodes));
   }
 }
-
-final Map<ShapeType, Widget Function(Scene)> _defaultRegistry = {
-  ShapeType.circle: (scene) => CircleComponent(scene: scene),
-  ShapeType.rect: (scene) => RectComponent(scene: scene),
-};

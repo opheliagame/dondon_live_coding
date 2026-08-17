@@ -33,6 +33,31 @@ enum ShapeType {
 class ShapeCommand {
   const ShapeCommand(this.type, this.args);
 
+  static DslResult<List<ShapeCommand>> parseMany(String source) {
+    final commands = <ShapeCommand>[];
+    final parts = source
+        .split(';')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty);
+
+    for (final part in parts) {
+      final parsed = parse(part);
+      if (!parsed.isOk || parsed.value == null) {
+        return parsed.mapErrors<List<ShapeCommand>>();
+      }
+      commands.add(parsed.value!);
+    }
+
+    if (commands.isEmpty) {
+      return DslResult.error(
+        'Expected at least one shape command.',
+        source: source,
+      );
+    }
+
+    return DslResult.ok(commands);
+  }
+
   static DslResult<ShapeCommand> parse(String source) {
     final match = _pattern.firstMatch(source.trim());
     if (match == null) {
