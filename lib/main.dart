@@ -1,4 +1,6 @@
 import 'package:dondon_live_coding/core/dsl.dart';
+import 'package:dondon_live_coding/core/dsl_result.dart';
+import 'package:dondon_live_coding/core/interpreter.dart';
 import 'package:dondon_live_coding/core/logger.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -51,8 +53,9 @@ class CircleSceneView extends StatefulWidget {
 
 class _CircleSceneViewState extends State<CircleSceneView> {
   final Scene _scene = Scene();
-  String? _error;
-  double _radius = 0;
+  final DslInterpreter _interpreter = const ShapeCommandInterpreter();
+  DslError? _error;
+  String _shapeCommand = 'none';
 
   @override
   void initState() {
@@ -67,39 +70,48 @@ class _CircleSceneViewState extends State<CircleSceneView> {
   }
 
   Future<void> _loadSceneFromDsl() async {
-    try {
-      final radius = await runCircleScript(circleScriptSource);
+    final script = await runCircleScript(circleScriptSource);
+    if (_reportIfFailed(script)) {
+      return;
+    }
 
-      _scene.removeAll();
+    final parsed = ShapeCommand.parse(script.value!);
+    if (_reportIfFailed(parsed)) {
+      return;
+    }
 
-      // Map DSL radius to world-space units to keep the circle in view.
-      final worldRadius = radius / 40.0;
-      final discNode = Node(
-        mesh: Mesh(
-          DiscGeometry(radius: worldRadius, segments: 96),
-          UnlitMaterial()..baseColorFactor = vm.Vector4(0.2, 0.25, 1.0, 1.0),
-        ),
-        localTransform: vm.Matrix4.identity(),
-      );
-      _scene.add(discNode);
+    final node = _interpreter.interpret(parsed.value!);
+    if (_reportIfFailed(node)) {
+      return;
+    }
 
-      if (!mounted) {
-        return;
-      }
+    _scene.removeAll();
+    _scene.add(node.value!);
 
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _shapeCommand = '${parsed.value}';
+      _error = null;
+    });
+  }
+
+  /// Leaves the current scene untouched and surfaces the oldest error.
+  bool _reportIfFailed(DslResult<Object?> result) {
+    final error = result.firstError;
+    if (error == null) {
+      return false;
+    }
+
+    _log.severe('DSL error: $error');
+    if (mounted) {
       setState(() {
-        _radius = radius;
-        _error = null;
-      });
-    } catch (e) {
-      _log.severe('Failed to render circle from DSL in SceneView', e);
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _error = '$e';
+        _error = error;
       });
     }
+    return true;
   }
 
   @override
@@ -133,9 +145,11 @@ class _CircleSceneViewState extends State<CircleSceneView> {
               padding: const EdgeInsets.all(12),
               child: Text(
                 _error == null
-                    ? 'SceneView circle radius: ${_radius.toStringAsFixed(1)}\nEdit circleScriptSource in lib/core/dsl.dart and hot reload.'
-                    : 'DSL error: $_error',
-                style: const TextStyle(color: Colors.white),
+                    ? 'SceneView shape: $_shapeCommand\nEdit circleScriptSource in lib/core/dsl.dart and hot reload.'
+                    : 'DSL error: ${_error!.message}\nStill showing: $_shapeCommand',
+                style: TextStyle(
+                  color: _error == null ? Colors.white : Colors.orangeAccent,
+                ),
               ),
             ),
           ),
