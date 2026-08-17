@@ -2,7 +2,7 @@
 //
 // The user's script is sandboxed in the DScript VM rather than evaluated as
 // Dart, so a bad script during a performance cannot take down the app. The
-// host exposes primitives (`circle`, `rect`, `out`) as a contract of external
+// host exposes primitives (`circle`, `rect`, `rotate`, `out`) as a contract of external
 // bindings; those bindings return command strings, keeping the boundary
 // between the sandbox and the renderer a plain serialisable value.
 //
@@ -15,7 +15,7 @@ import 'package:dondon_live_coding/core/logger.dart';
 import 'package:dscript_dart/dscript_dart.dart';
 
 final _log = AppLogger.get('app.dsl');
-const _hostBindingNames = ['circle', 'rect', 'out'];
+const _hostBindingNames = ['circle', 'rect', 'rotate', 'out'];
 
 // Edit this string to test the DSL.
 String get circleScriptSource => '''
@@ -27,7 +27,10 @@ description "demo a live coding flutter environment";
 contract Canvas {
   impl render() -> string {
     return out(
-      rect(14.0,12.0),
+      rotate(
+        12, 
+        rect(14.0,12.0)
+      ),
       out(
         circle(12.0),
         rect(125.0,12.0)
@@ -67,6 +70,13 @@ final ContractSignature _canvasContract = contract('Canvas')
     .param(PrimitiveType.DOUBLE)
     .param(PrimitiveType.DOUBLE)
     .describe('Constructs a rectangle shape command.')
+    .end()
+    .bind<String>('rotate', (double degrees, String shape) {
+      return 'rotate($degrees,$shape)';
+    })
+    .param(PrimitiveType.DOUBLE)
+    .param(PrimitiveType.STRING)
+    .describe('Wraps a shape command with a rotation in degrees.')
     .end()
     .bind<String>('out', (String shape, String restShapes) {
       return '$shape$_commandSeparator$restShapes';

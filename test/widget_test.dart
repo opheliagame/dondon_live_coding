@@ -18,7 +18,7 @@ class _CircleValidationInterpreter implements DslInterpreter {
 
   @override
   DslResult<Node> interpret(ShapeCommand command) {
-    if (command.type == ShapeType.circle && command.args.first <= 0) {
+    if (command.type == ShapeType.circle && command.numericArgs.first <= 0) {
       return DslResult.error('circle(radius) requires a positive radius.');
     }
 
@@ -38,7 +38,7 @@ description "Render a circle from DScript";
 
 contract Canvas {
   impl render() -> string {
-    return out(circle(64.0), out(rect(10.0,8.0), rect(6.0,4.0)));
+    return out(rotate(12, circle(64)), out(rect(10,8), rect(6,4)));
   }
 }
 ''';
@@ -48,7 +48,8 @@ contract Canvas {
     expect(result.isOk, isTrue);
     expect(result.value, isNotNull);
     expect(result.value!.commands.length, 3);
-    expect(result.value!.commands.first.type.name, 'circle');
+    expect(result.value!.commands.first.type.name, 'rotate');
+    expect(result.value!.commands.first.commandArgs.single.type.name, 'circle');
     expect(result.value!.commands.last.type.name, 'rect');
     expect(result.value!.nodes.length, 3);
   });

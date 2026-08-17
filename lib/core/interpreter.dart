@@ -17,7 +17,8 @@ import 'package:vector_math/vector_math.dart' as vm;
 
 enum ShapeType {
   circle,
-  rect;
+  rect,
+  rotate;
 
   static ShapeType? tryFromName(String name) {
     for (final type in ShapeType.values) {
@@ -31,7 +32,11 @@ enum ShapeType {
 
 /// A shape command emitted by the DSL, e.g. `circle(32.0)`.
 class ShapeCommand {
-  const ShapeCommand(this.type, this.args);
+  const ShapeCommand({
+    required this.type,
+    this.numericArgs = const [],
+    this.commandArgs = const [],
+  });
 
   static DslResult<List<ShapeCommand>> parseMany(String source) {
     final commands = <ShapeCommand>[];
@@ -62,7 +67,7 @@ class ShapeCommand {
     final match = _pattern.firstMatch(source.trim());
     if (match == null) {
       return DslResult.error(
-        'Invalid shape command. Expected formats like circle(32.0) or rect(64.0,32.0).',
+        'Invalid shape command. Expected circle(...), rect(...), or rotate(...).',
         source: source,
       );
     }
@@ -75,31 +80,124 @@ class ShapeCommand {
       );
     }
 
-    final rawArgs = match.group(2)!.trim();
-    final args = <double>[];
-    if (rawArgs.isNotEmpty) {
-      for (final rawArg in rawArgs.split(',')) {
-        final value = double.tryParse(rawArg.trim());
-        if (value == null) {
+    final argTokens = _splitTopLevelArgs(match.group(2)!);
+    switch (type) {
+      case ShapeType.circle:
+        if (argTokens.length != 1) {
           return DslResult.error(
-            'Invalid numeric argument "${rawArg.trim()}".',
+            'circle(...) expects exactly one numeric argument.',
             source: source,
           );
         }
-        args.add(value);
-      }
-    }
+        final radius = _parseNumericArg(argTokens.first, source);
+        if (!radius.isOk || radius.value == null) {
+          return radius.mapErrors<ShapeCommand>();
+        }
+        return DslResult.ok(
+          ShapeCommand(type: type, numericArgs: [radius.value!]),
+        );
+      case ShapeType.rect:
+        if (argTokens.length != 2) {
+          return DslResult.error(
+            'rect(...) expects exactly two numeric arguments.',
+            source: source,
+          );
+        }
+        final width = _parseNumericArg(argTokens[0], source);
+        if (!width.isOk || width.value == null) {
+          return width.mapErrors<ShapeCommand>();
+        }
+        final height = _parseNumericArg(argTokens[1], source);
+        if (!height.isOk || height.value == null) {
+          return height.mapErrors<ShapeCommand>();
+        }
+        return DslResult.ok(
+          ShapeCommand(type: type, numericArgs: [width.value!, height.value!]),
+        );
+      case ShapeType.rotate:
+        if (argTokens.length != 2) {
+          return DslResult.error(
+            'rotate(...) expects exactly two arguments: angle and shape.',
+            source: source,
+          );
+        }
 
-    return DslResult.ok(ShapeCommand(type, args));
+        final degrees = _parseNumericArg(argTokens[0], source);
+        if (!degrees.isOk || degrees.value == null) {
+          return degrees.mapErrors<ShapeCommand>();
+        }
+
+        final inner = parse(argTokens[1]);
+        if (!inner.isOk || inner.value == null) {
+          return inner.mapErrors<ShapeCommand>();
+        }
+
+        return DslResult.ok(
+          ShapeCommand(
+            type: type,
+            numericArgs: [degrees.value!],
+            commandArgs: [inner.value!],
+          ),
+        );
+    }
   }
 
   final ShapeType type;
-  final List<double> args;
+  final List<double> numericArgs;
+  final List<ShapeCommand> commandArgs;
 
   static final RegExp _pattern = RegExp(r'^([a-zA-Z_]\w*)\((.*)\)$');
 
+  static List<String> _splitTopLevelArgs(String rawArgs) {
+    final args = <String>[];
+    var depth = 0;
+    var start = 0;
+    final input = rawArgs.trim();
+
+    if (input.isEmpty) {
+      return args;
+    }
+
+    for (var i = 0; i < input.length; i++) {
+      final char = input[i];
+      if (char == '(') {
+        depth++;
+      } else if (char == ')') {
+        depth--;
+      } else if (char == ',' && depth == 0) {
+        args.add(input.substring(start, i).trim());
+        start = i + 1;
+      }
+    }
+
+    args.add(input.substring(start).trim());
+    return args.where((arg) => arg.isNotEmpty).toList();
+  }
+
+  static DslResult<double> _parseNumericArg(String rawArg, String source) {
+    final value = double.tryParse(rawArg.trim());
+    if (value == null) {
+      return DslResult.error(
+        'Invalid numeric argument "${rawArg.trim()}".',
+        source: source,
+      );
+    }
+
+    return DslResult.ok(value);
+  }
+
   @override
-  String toString() => '${type.name}(${args.join(',')})';
+  String toString() {
+    switch (type) {
+      case ShapeType.circle:
+      case ShapeType.rect:
+        return '${type.name}(${numericArgs.join(',')})';
+      case ShapeType.rotate:
+        final angle = numericArgs.isEmpty ? '' : numericArgs.first;
+        final inner = commandArgs.isEmpty ? '' : commandArgs.first;
+        return '${type.name}($angle,$inner)';
+    }
+  }
 }
 
 /// Turns a parsed DSL shape command into a scene node.
@@ -119,11 +217,13 @@ class ShapeCommandInterpreter implements DslInterpreter {
         return _circle(command);
       case ShapeType.rect:
         return _rect(command);
+      case ShapeType.rotate:
+        return _rotate(command);
     }
   }
 
   DslResult<Node> _circle(ShapeCommand command) {
-    final args = command.args;
+    final args = command.numericArgs;
     if (args.length != 1) {
       return DslResult.error(
         'circle(...) expects exactly one radius argument.',
@@ -151,7 +251,7 @@ class ShapeCommandInterpreter implements DslInterpreter {
   }
 
   DslResult<Node> _rect(ShapeCommand command) {
-    final args = command.args;
+    final args = command.numericArgs;
     if (args.length != 2) {
       return DslResult.error(
         'rect(...) expects exactly two arguments: width, height.',
@@ -180,5 +280,33 @@ class ShapeCommandInterpreter implements DslInterpreter {
         localTransform: vm.Matrix4.identity(),
       ),
     );
+  }
+
+  DslResult<Node> _rotate(ShapeCommand command) {
+    final args = command.numericArgs;
+    if (args.length != 1) {
+      return DslResult.error(
+        'rotate(angle,shape) expects exactly one numeric angle.',
+        source: '$command',
+      );
+    }
+
+    if (command.commandArgs.length != 1) {
+      return DslResult.error(
+        'rotate(angle,shape) expects exactly one nested shape command.',
+        source: '$command',
+      );
+    }
+
+    final innerNode = interpret(command.commandArgs.first);
+    if (!innerNode.isOk || innerNode.value == null) {
+      return innerNode.mapErrors<Node>();
+    }
+
+    final wrapper = Node(
+      localTransform: vm.Matrix4.identity()..rotateY(vm.radians(args.first)),
+    );
+    wrapper.add(innerNode.value!);
+    return DslResult.ok(wrapper);
   }
 }
