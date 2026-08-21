@@ -4,12 +4,24 @@
 
 `flutter_scene` requires flutter master channel
 
-```
+### Before debugging
+
+```bash
 $ flutter channel master
 $ flutter upgrade
-$ flutter config --enable-dart-data-assets
+$ export FLUTTER_DART_DATA_ASSETS=true # one-time setup
+$ flutter config --enable-native-assets # one-time setup
+$ flutter config --enable-dart-data-assets # one-time setup
+$ flutter pub get
+```
+
+### Running the app
+
+```bash
 $ flutter run -d macos --enable-flutter-gpu --enable-impeller
 ```
+
+Or use VSCode `launch.json` file to run any of the defined configuration and use hot reload.
 
 ## Assets
 
