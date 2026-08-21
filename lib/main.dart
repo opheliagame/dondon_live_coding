@@ -7,6 +7,7 @@
 import 'package:dondon_live_coding/core/dsl.dart';
 import 'package:dondon_live_coding/core/logger.dart';
 import 'package:dondon_live_coding/runtime/dsl_stage.dart';
+import 'package:dondon_live_coding/shaders.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -20,6 +21,7 @@ void main() async {
 
   try {
     await Scene.initializeStaticResources();
+    await loadShaderBundle();
   } catch (e) {
     if (kDebugMode) {
       _log.severe('Failed to initialize Flutter Scene resources', e);

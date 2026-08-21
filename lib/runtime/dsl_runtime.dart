@@ -7,18 +7,24 @@
 import 'package:dondon_live_coding/core/dsl.dart';
 import 'package:dondon_live_coding/core/dsl_result.dart';
 import 'package:dondon_live_coding/core/interpreter.dart';
+import 'package:dondon_live_coding/core/osc_material.dart';
 import 'package:flutter_scene/scene.dart';
 
 class DslFrame {
-  const DslFrame({required this.commands, required this.nodes});
+  const DslFrame({
+    required this.commands,
+    required this.nodes,
+    this.animatedMaterials = const [],
+  });
 
   final List<ShapeCommand> commands;
   final List<Node> nodes;
+  final List<OscMaterial> animatedMaterials;
 }
 
 class DslRuntime {
   DslRuntime({DslInterpreter? interpreter})
-    : _interpreter = interpreter ?? const ShapeCommandInterpreter();
+    : _interpreter = interpreter ?? ShapeCommandInterpreter();
 
   final DslInterpreter _interpreter;
 
@@ -42,6 +48,17 @@ class DslRuntime {
       nodes.add(node.value!);
     }
 
-    return DslResult.ok(DslFrame(commands: parsed.value!, nodes: nodes));
+    final interpreter = _interpreter;
+    final animatedMaterials = interpreter is AnimatedMaterialSource
+        ? (interpreter as AnimatedMaterialSource).takeAnimatedMaterials()
+        : const <OscMaterial>[];
+
+    return DslResult.ok(
+      DslFrame(
+        commands: parsed.value!,
+        nodes: nodes,
+        animatedMaterials: animatedMaterials,
+      ),
+    );
   }
 }

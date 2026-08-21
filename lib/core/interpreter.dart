@@ -12,12 +12,14 @@
 //   leaves the previously rendered scene intact.
 
 import 'package:dondon_live_coding/core/dsl_result.dart';
+import 'package:dondon_live_coding/core/osc_material.dart';
 import 'package:flutter_scene/scene.dart';
 import 'package:vector_math/vector_math.dart' as vm;
 
 enum ShapeType {
   circle,
   rect,
+  osc,
   rotate;
 
   static ShapeType? tryFromName(String name) {
@@ -67,7 +69,7 @@ class ShapeCommand {
     final match = _pattern.firstMatch(source.trim());
     if (match == null) {
       return DslResult.error(
-        'Invalid shape command. Expected circle(...), rect(...), or rotate(...).',
+        'Invalid shape command. Expected circle(...), rect(...), osc(...), or rotate(...).',
         source: source,
       );
     }
@@ -114,6 +116,24 @@ class ShapeCommand {
         return DslResult.ok(
           ShapeCommand(type: type, numericArgs: [width.value!, height.value!]),
         );
+      case ShapeType.osc:
+        if (argTokens.length != 3) {
+          return DslResult.error(
+            'osc(...) expects exactly three arguments: frequency, sync, offset.',
+            source: source,
+          );
+        }
+
+        final numericArgs = <double>[];
+        for (final token in argTokens) {
+          final parsed = _parseNumericArg(token, source);
+          if (!parsed.isOk || parsed.value == null) {
+            return parsed.mapErrors<ShapeCommand>();
+          }
+          numericArgs.add(parsed.value!);
+        }
+
+        return DslResult.ok(ShapeCommand(type: type, numericArgs: numericArgs));
       case ShapeType.rotate:
         if (argTokens.length != 2) {
           return DslResult.error(
@@ -191,6 +211,7 @@ class ShapeCommand {
     switch (type) {
       case ShapeType.circle:
       case ShapeType.rect:
+      case ShapeType.osc:
         return '${type.name}(${numericArgs.join(',')})';
       case ShapeType.rotate:
         final angle = numericArgs.isEmpty ? '' : numericArgs.first;
@@ -205,10 +226,32 @@ abstract class DslInterpreter {
   DslResult<Node> interpret(ShapeCommand command);
 }
 
-class ShapeCommandInterpreter implements DslInterpreter {
-  const ShapeCommandInterpreter({this.pixelsPerWorldUnit = 40.0});
+/// Implemented by interpreters that produce materials needing a per-frame time
+/// update; the stage drives them from its render loop.
+abstract interface class AnimatedMaterialSource {
+  List<OscMaterial> takeAnimatedMaterials();
+}
+
+class ShapeCommandInterpreter
+    implements DslInterpreter, AnimatedMaterialSource {
+  ShapeCommandInterpreter({this.pixelsPerWorldUnit = 40.0});
 
   final double pixelsPerWorldUnit;
+
+  // World units of the quad `osc` paints on; sized to fill the stage camera.
+  static const double _oscPlaneSize = 24.0;
+
+  // Keeps the oscillator behind the shapes drawn at the origin plane.
+  static const double _oscPlaneDepthOffset = -0.01;
+
+  final List<OscMaterial> _animatedMaterials = [];
+
+  @override
+  List<OscMaterial> takeAnimatedMaterials() {
+    final drained = List<OscMaterial>.of(_animatedMaterials);
+    _animatedMaterials.clear();
+    return drained;
+  }
 
   @override
   DslResult<Node> interpret(ShapeCommand command) {
@@ -217,6 +260,8 @@ class ShapeCommandInterpreter implements DslInterpreter {
         return _circle(command);
       case ShapeType.rect:
         return _rect(command);
+      case ShapeType.osc:
+        return _osc(command);
       case ShapeType.rotate:
         return _rotate(command);
     }
@@ -278,6 +323,44 @@ class ShapeCommandInterpreter implements DslInterpreter {
           UnlitMaterial()..baseColorFactor = vm.Vector4(0.2, 0.9, 0.5, 1.0),
         ),
         localTransform: vm.Matrix4.identity(),
+      ),
+    );
+  }
+
+  DslResult<Node> _osc(ShapeCommand command) {
+    final args = command.numericArgs;
+    if (args.length != 3) {
+      return DslResult.error(
+        'osc(...) expects exactly three arguments: frequency, sync, offset.',
+        source: '$command',
+      );
+    }
+
+    if (!OscMaterial.isAvailable) {
+      return DslResult.error(
+        'osc(...) requires the shader bundle to be loaded.',
+        source: '$command',
+      );
+    }
+
+    final material = OscMaterial(
+      frequency: args[0],
+      sync: args[1],
+      offset: args[2],
+    );
+    _animatedMaterials.add(material);
+
+    return DslResult.ok(
+      Node(
+        mesh: Mesh(
+          PlaneGeometry(width: _oscPlaneSize, depth: _oscPlaneSize),
+          material,
+        ),
+        localTransform: vm.Matrix4.translationValues(
+          0,
+          _oscPlaneDepthOffset,
+          0,
+        ),
       ),
     );
   }

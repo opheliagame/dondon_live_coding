@@ -15,7 +15,7 @@ import 'package:dondon_live_coding/core/logger.dart';
 import 'package:dscript_dart/dscript_dart.dart';
 
 final _log = AppLogger.get('app.dsl');
-const _hostBindingNames = ['circle', 'rect', 'rotate', 'out'];
+const _hostBindingNames = ['circle', 'rect', 'osc', 'rotate', 'out'];
 
 // Edit this string to test the DSL.
 String get circleScriptSource => '''
@@ -27,13 +27,13 @@ description "demo a live coding flutter environment";
 contract Canvas {
   impl render() -> string {
     return out(
-      rotate(
-        12, 
-        rect(14.0,12.0)
-      ),
+      osc(20.0, 0.1, 0.8),
       out(
-        circle(12.0),
-        rect(125.0,12.0)
+        rotate(
+          12, 
+          rect(14.0,12.0)
+        ),
+        circle(12.0)
       )
     );
   }
@@ -70,6 +70,17 @@ final ContractSignature _canvasContract = contract('Canvas')
     .param(PrimitiveType.DOUBLE)
     .param(PrimitiveType.DOUBLE)
     .describe('Constructs a rectangle shape command.')
+    .end()
+    .bind<String>('osc', (double frequency, double sync, double offset) {
+      return 'osc($frequency,$sync,$offset)';
+    })
+    .param(PrimitiveType.DOUBLE)
+    .param(PrimitiveType.DOUBLE)
+    .param(PrimitiveType.DOUBLE)
+    .describe(
+      'Constructs an oscillator command: a sine gradient along the x axis, '
+      'scrolling at sync and phase-shifted per color channel by offset.',
+    )
     .end()
     .bind<String>('rotate', (double degrees, String shape) {
       return 'rotate($degrees,$shape)';

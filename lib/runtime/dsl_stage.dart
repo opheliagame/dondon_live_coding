@@ -8,6 +8,7 @@ import 'package:dondon_live_coding/components/dsl_status_overlay.dart';
 import 'package:dondon_live_coding/core/dsl.dart';
 import 'package:dondon_live_coding/core/dsl_result.dart';
 import 'package:dondon_live_coding/core/logger.dart';
+import 'package:dondon_live_coding/core/osc_material.dart';
 import 'package:dondon_live_coding/runtime/dsl_runtime.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_scene/scene.dart';
@@ -30,6 +31,8 @@ class _DslStageState extends State<DslStage> {
   final Scene _scene = Scene();
   late final PerspectiveCamera _camera;
   late final DslRuntime _runtime;
+
+  List<OscMaterial> _animatedMaterials = const [];
 
   DslError? _error;
   String _status = 'none';
@@ -80,6 +83,7 @@ class _DslStageState extends State<DslStage> {
     for (final node in frame.nodes) {
       _scene.add(node);
     }
+    _animatedMaterials = frame.animatedMaterials;
 
     if (!mounted) {
       return;
@@ -110,14 +114,24 @@ class _DslStageState extends State<DslStage> {
   @override
   void dispose() {
     _scene.removeAll();
+    _animatedMaterials = const [];
     super.dispose();
+  }
+
+  void _tick(Duration elapsed, double deltaSeconds) {
+    final seconds = elapsed.inMicroseconds / Duration.microsecondsPerSecond;
+    for (final material in _animatedMaterials) {
+      material.updateTime(seconds);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        Positioned.fill(child: SceneView(_scene, camera: _camera)),
+        Positioned.fill(
+          child: SceneView(_scene, camera: _camera, onTick: _tick),
+        ),
         Positioned(
           left: 16,
           right: 16,

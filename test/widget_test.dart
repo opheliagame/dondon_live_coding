@@ -78,4 +78,20 @@ contract Canvas {
     expect(result.firstError, isNotNull);
     expect(result.firstError!.message, contains('positive radius'));
   });
+
+  test('ShapeCommand parses osc with three numeric args', () {
+    final parsed = ShapeCommand.parse('osc(20.0,0.1,0.8)');
+
+    expect(parsed.isOk, isTrue);
+    expect(parsed.value!.type, ShapeType.osc);
+    expect(parsed.value!.numericArgs, [20.0, 0.1, 0.8]);
+    expect('${parsed.value!}', 'osc(20.0,0.1,0.8)');
+  });
+
+  test('ShapeCommand rejects osc with the wrong arity', () {
+    final parsed = ShapeCommand.parse('osc(20.0)');
+
+    expect(parsed.isOk, isFalse);
+    expect(parsed.firstError!.message, contains('three arguments'));
+  });
 }
